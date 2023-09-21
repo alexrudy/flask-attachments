@@ -1,47 +1,21 @@
-from typing import Iterator
 import logging
+from collections.abc import Iterator
 
 import pytest
-import structlog
-from rich.traceback import install
-from sqlalchemy.engine import Engine
-from sqlalchemy.orm import Session
-from sqlalchemy import event
 from flask import Flask
 from flask.testing import FlaskClient
-
+from flask_attachments.extension import Attachments
+from flask_attachments.extension import settings
 from flask_attachments.models import Base
-from flask_attachments.extension import Attachments, settings
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session
 
-logger = structlog.get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def log_queries(conn, cursor, statement, parameters, context, executemany) -> None:
-    logger.debug(statement, parameters=parameters)
-
-
-@pytest.fixture(scope="session")
-def setup():
-    structlog.configure(
-        processors=[
-            structlog.contextvars.merge_contextvars,
-            structlog.processors.add_log_level,
-            structlog.processors.StackInfoRenderer(),
-            structlog.dev.set_exc_info,
-            structlog.processors.TimeStamper(),
-            structlog.dev.ConsoleRenderer(),
-        ],
-        wrapper_class=structlog.make_filtering_bound_logger(logging.NOTSET),
-        context_class=dict,
-        logger_factory=structlog.PrintLoggerFactory(),
-        cache_logger_on_first_use=False,
-    )
-
-    # formatter = structlog.stdlib.ProcessorFormatter(
-    #     processors=[structlog.dev.ConsoleRenderer()],
-    # )
-
-    install(show_locals=True)
+    logger.debug("%s parameters=%r", statement, parameters)
 
 
 @pytest.fixture()

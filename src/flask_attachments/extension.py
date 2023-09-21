@@ -15,9 +15,9 @@ import structlog
 from flask import current_app
 from flask import Flask
 from sqlalchemy import event
+from sqlalchemy.engine import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.engine import make_url
-from sqlalchemy.engine import create_engine
 from werkzeug.local import LocalProxy
 
 

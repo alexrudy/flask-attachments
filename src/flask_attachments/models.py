@@ -1,8 +1,3 @@
-from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.orm import Mapped
-from sqlalchemy.orm import mapped_column
-from sqlalchemy import String, Integer, LargeBinary, Enum, Uuid, DateTime
-
 import contextlib
 import datetime as dt
 import hashlib
@@ -20,8 +15,17 @@ from zlib import crc32
 import structlog
 from flask import send_file
 from flask import url_for
+from sqlalchemy import DateTime
+from sqlalchemy import Enum
 from sqlalchemy import func
+from sqlalchemy import Integer
+from sqlalchemy import LargeBinary
+from sqlalchemy import String
+from sqlalchemy import Uuid
+from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import deferred
+from sqlalchemy.orm import Mapped
+from sqlalchemy.orm import mapped_column
 from sqlalchemy.orm import validates
 from werkzeug import Response
 from werkzeug.datastructures import FileStorage
@@ -39,7 +43,7 @@ class Base(DeclarativeBase):
     """Provides a base class for all models in flask-attachments"""
 
 
-class Attachment(Base):  # type: ignore[name-defined]
+class Attachment(Base):
     """Represents a file on the filesystem / or stored in the attachment database"""
 
     __tablename__ = "attachment"
@@ -177,7 +181,7 @@ class Attachment(Base):  # type: ignore[name-defined]
 
         # Save file contents
         self.content_length = len(data)
-        self.contents = compressed = compression.compress(data)  # type: ignore
+        self.contents = compressed = compression.compress(data)
         self.compression = compression
 
         # Compute Digest

@@ -9,4 +9,3 @@ Flask Attachments provides a way to integrate arbitrary media with SQLAlchemy in
 
 
 * Free software: BSD license
-

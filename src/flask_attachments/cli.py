@@ -1,8 +1,8 @@
 import contextlib
 from collections.abc import Iterable
+from collections.abc import Iterator
 from pathlib import Path
 from typing import IO
-from typing import Iterator
 
 import click
 import humanize
@@ -13,9 +13,9 @@ from sqlalchemy import delete
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .extension import settings
 from .models import Attachment
 from .services import AttachmentCache
-from .extension import settings
 
 group = AppGroup("attach", help="Manage attachments")
 
@@ -23,8 +23,7 @@ group = AppGroup("attach", help="Manage attachments")
 @contextlib.contextmanager
 def sqlalchemy_session() -> Iterator[Session]:
     """Create and use a session attached to an attachment database"""
-    engine = settings.engine()
-    with Session(engine) as session:
+    with Session(settings.engine) as session:  # type: ignore[attr-defined]
         yield session
 
 
@@ -60,7 +59,8 @@ def import_file(
             click.echo(f"Imported {filename}")
 
 
-def show_attachement(attachment: Attachment, table: rich.table.Table | None = None) -> None:
+def attachment_cells(attachment: Attachment) -> dict[str, str]:
+    """Produce the table cells for displaying an attachment"""
     if attachment.cached_at is None:
         age_msg = "(not cached)"
     else:
@@ -74,18 +74,17 @@ def show_attachement(attachment: Attachment, table: rich.table.Table | None = No
     else:
         ratio = ""
         size_msg = f"??? -> {humanize.naturalsize(attachment.compressed_size)}"
-    if table is None:
-        click.echo(f"{attachment.id.hex} {attachment.filename:20s} {age_msg} {size_msg} {attachment.compression.name}")
-    else:
-        table.add_row(
-            attachment.id.hex,
-            attachment.filename,
-            age_msg,
-            humanize.naturalsize(attachment.size) if attachment.size else "??",
-            humanize.naturalsize(attachment.compressed_size),
-            ratio,
-            attachment.compression.name,
-        )
+
+    return dict(
+        ID=attachment.id.hex,
+        Filename=attachment.filename,
+        Age=age_msg,
+        Size=humanize.naturalsize(attachment.size) if attachment.size else "??",
+        SizeMessage=size_msg,
+        Compressed=humanize.naturalsize(attachment.compressed_size),
+        Ratio=ratio,
+        Algo=attachment.compression.name,
+    )
 
 
 @group.command()
@@ -116,7 +115,13 @@ def list(content_type: str | None, on_disk: bool, use_rich: bool) -> None:
         for attachment in session.execute(query).scalars():
             if on_disk and not attachment.cached_filepath.exists():
                 continue
-            show_attachement(attachment, table=table)
+            cells = attachment_cells(attachment)
+            if table is not None:
+                table.add_row(*(cells[str(column.header)] for column in table.columns))
+            else:
+                click.echo(
+                    "{ID} {Filename:20s} {Age} {SizeMessage} {Algo}".format_map(cells),
+                )
         if table is not None:
             c = rich.console.Console()
             c.print(table)
@@ -135,7 +140,10 @@ def warm(content_type: str | None) -> None:
     with sqlalchemy_session() as session:
         for attachment in session.execute(query).scalars():
             attachment.warm()
-            show_attachement(attachment)
+            cells = attachment_cells(attachment)
+            click.echo(
+                "{ID} {Filename:20s} {Age} {SizeMessage} {Algo}".format_map(cells),
+            )
 
 
 @group.command(name="delete")
