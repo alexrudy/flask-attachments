@@ -1,0 +1,5 @@
+flask
+sqlalchemy>=1.4
+structlog
+humanize
+rich

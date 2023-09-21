@@ -1,0 +1,23 @@
+include AUTHORS.rst
+include CONTRIBUTING.rst
+include HISTORY.rst
+include LICENSE
+include README.rst
+
+graft src/flask_attachments/templates
+graft src/flask_attachments/static
+graft src/flask_attachments/data
+graft src/flask_attachments/assets
+
+recursive-include src/flask_attachments/ templates/*.html
+recursive-include src/flask_attachments/ templates/**/*.html
+recursive-include src/flask_attachments/ data/*
+recursive-include src/flask_attachments/ *.py
+recursive-include src/flask_attachments/ *.cfg
+include src/flask_attachments/py.typed
+
+recursive-include tests *
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
+
+recursive-include docs *.rst conf.py Makefile make.bat *.jpg *.png *.gif
