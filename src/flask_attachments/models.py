@@ -9,7 +9,6 @@ import tempfile
 import uuid
 from pathlib import Path
 from typing import Any
-from typing import cast
 from typing import IO
 from zlib import crc32
 
@@ -234,7 +233,7 @@ class Attachment(Base):
 
     @cached_property
     def cached_filepath(self) -> Path:
-        filename = cast(Path, settings.cache_directory()) / f"{self.digest_algorithm}-{self.digest}"  # type: ignore[attr-defined]
+        filename = settings.cache_directory() / f"{self.digest_algorithm}-{self.digest}"
         if self.extension is not None:
             return filename.with_suffix(self.extension)
         return filename
@@ -296,7 +295,7 @@ class Attachment(Base):
 
 def parse_compression(compression: CompressionAlgorithm | str | None) -> CompressionAlgorithm:
     if compression is None:
-        return cast(CompressionAlgorithm, settings.compression())  # type: ignore[attr-defined]
+        return settings.compression()
     elif isinstance(compression, str):
         return CompressionAlgorithm[compression.upper()]
     return compression
@@ -304,7 +303,7 @@ def parse_compression(compression: CompressionAlgorithm | str | None) -> Compres
 
 def parse_digest(digest_algorithm: str | None) -> str:
     if digest_algorithm is None:
-        return cast(str, settings.digest())  # type: ignore[attr-defined]
+        return settings.digest()
     return digest_algorithm
 
 

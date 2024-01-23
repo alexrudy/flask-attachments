@@ -26,7 +26,7 @@ group = AppGroup("attach", help="Manage attachments")
 @contextlib.contextmanager
 def sqlalchemy_session() -> Iterator[Session]:
     """Create and use a session attached to an attachment database"""
-    with Session(settings.engine) as session:  # type: ignore[attr-defined]
+    with Session(settings.engine) as session:
         yield session
 
 
