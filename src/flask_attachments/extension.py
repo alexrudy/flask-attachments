@@ -1,15 +1,12 @@
-import bz2
 import contextlib
 import dataclasses as dc
 import datetime as dt
-import enum
-import gzip
 import hashlib
-import lzma
 import tempfile
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
+from typing import cast
+from typing import TYPE_CHECKING
 
 import structlog
 from flask import current_app
@@ -20,6 +17,11 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.engine import make_url
 from werkzeug.local import LocalProxy
 
+from .compression import CompressionAlgorithm
+
+if TYPE_CHECKING:
+    from .services import AttachmentCache
+
 
 log = structlog.get_logger(__name__)
 
@@ -27,46 +29,7 @@ EXTENSION_NAME = "flask-attachments"
 EXTENSION_CONFIG_NAMESPACE = "ATTACHMENTS_"
 
 
-class CompressionAlgorithm(enum.Enum):
-    NONE = enum.auto()
-    GZIP = enum.auto()
-    BZ2 = enum.auto()
-    LZMA = enum.auto()
-
-    def compress(self, data: bytes) -> bytes:
-        if self == CompressionAlgorithm.NONE:
-            return data
-        if self == CompressionAlgorithm.LZMA:
-            return lzma.compress(data)
-        if self == CompressionAlgorithm.BZ2:
-            return bz2.compress(data)
-        if self == CompressionAlgorithm.GZIP:
-            return gzip.compress(data)
-
-        raise ValueError(f"Unsupported compression kind: {self.name}")
-
-    def decompress(self, data: bytes) -> bytes:
-        if self == CompressionAlgorithm.NONE:
-            return data
-        if self == CompressionAlgorithm.LZMA:
-            return lzma.decompress(data)
-        if self == CompressionAlgorithm.BZ2:
-            return bz2.decompress(data)
-        if self == CompressionAlgorithm.GZIP:
-            return gzip.decompress(data)
-
-        raise ValueError(f"Unsupported compression kind: {self.name}")
-
-
 logger = structlog.get_logger(__name__)
-
-
-@contextlib.contextmanager
-def suppress(msg: str) -> Iterator[None]:
-    try:
-        yield
-    except BaseException as ex:
-        logger.exception(f"Exception while {msg}: {ex!r}")
 
 
 @dc.dataclass
@@ -99,17 +62,25 @@ class AttachmentSettings:
         return (Path(current_app.instance_path) / Path(self.config["CACHE_DIRECTORY"])).absolute()
 
     def cache_age(self) -> dt.timedelta:
-        return dt.timedelta(hours=self.config["CACHE_AGE_HOURS"])
+        return dt.timedelta(hours=int(self.config["CACHE_AGE_HOURS"]))
 
     def cache_size(self) -> int:
-        return self.config["CACHE_SIZE_MAX"]
+        return int(self.config["CACHE_SIZE_MAX"])
+
+    def cache(self) -> "AttachmentCache":
+        from .services import AttachmentCache
+
+        return AttachmentCache(self)
 
 
 def get_settings() -> AttachmentSettings:
-    return current_app.extensions[EXTENSION_NAME]
+    try:
+        return current_app.extensions[EXTENSION_NAME]
+    except KeyError as exc:
+        raise RuntimeError("No attachments extension registered on this app, call init_app first") from exc
 
 
-settings = LocalProxy(get_settings)
+settings = cast(AttachmentSettings, LocalProxy(get_settings))
 
 
 class AttachmentsConfigurationError(ValueError):
@@ -120,6 +91,9 @@ class Attachments:
     def __init__(self, app: Flask | None = None) -> None:
         if app is not None:
             self.init_app(app)
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__} at {id(self)!s}>"
 
     def init_app(self, app: Flask) -> None:
         """Initialize the app here"""
@@ -138,37 +112,47 @@ class Attachments:
             app.config[f"{EXTENSION_CONFIG_NAMESPACE}CACHE_DIRECTORY"] = directory = tempfile.mkdtemp()
             log.warn("Using a temporary directory for attachment caching", directory=directory)
 
+        if not directory:
+            raise AttachmentsConfigurationError(
+                f"Must set {EXTENSION_CONFIG_NAMESPACE}CACHE_DIRECTORY for attachments extension"
+            )
+
         # Ensure the directory exists
         directory = Path(directory)
         try:
             directory.mkdir(parents=True, exist_ok=True)
-        except OSError as ex:
-            raise AttachmentsConfigurationError(f"Unsupported attachment cache directory: {directory}") from ex
+        except OSError as exc:
+            log.exception("Failed to create attachment cache directory", directory=directory)
+            raise AttachmentsConfigurationError(f"Unsupported attachment cache directory: {directory}") from exc
 
         cache_size = app.config.setdefault(f"{EXTENSION_CONFIG_NAMESPACE}CACHE_SIZE_MAX", 2 * 10**9)
         try:
             int(cache_size)
-        except ValueError as ex:
-            raise AttachmentsConfigurationError(f"Invalid cache size: {cache_size}") from ex
+        except ValueError as exc:
+            log.exception("Invalid cache size", cache_size=cache_size)
+            raise AttachmentsConfigurationError(f"Invalid cache size: {cache_size}") from exc
 
         cache_age = app.config.setdefault(f"{EXTENSION_CONFIG_NAMESPACE}CACHE_AGE_HOURS", 12)
         try:
             int(cache_age)
-        except ValueError as ex:
-            raise AttachmentsConfigurationError(f"Invalid cache age: {cache_age}") from ex
+        except ValueError as exc:
+            log.exception("Invalid cache age", cache_age=cache_age)
+            raise AttachmentsConfigurationError(f"Invalid cache age: {cache_age}") from exc
 
         compression = app.config.setdefault(f"{EXTENSION_CONFIG_NAMESPACE}COMPRESSION", "lzma")
         algorithm = app.config.setdefault(f"{EXTENSION_CONFIG_NAMESPACE}DIGEST", "sha256")
 
         try:
             CompressionAlgorithm[compression.upper()]
-        except KeyError as ex:
-            raise AttachmentsConfigurationError(f"Unsupported compression algorithm: {compression}") from ex
+        except KeyError as exc:
+            log.exception("Unsupported compression algorithm", compression=compression)
+            raise AttachmentsConfigurationError(f"Unsupported compression algorithm: {compression}") from exc
 
         try:
             hashlib.new(algorithm)
-        except ValueError as ex:
-            raise AttachmentsConfigurationError(f"Unsupported digest algorithm: {algorithm}") from ex
+        except ValueError as exc:
+            log.exception("Unsupported digest algorithm", algorithm=algorithm)
+            raise AttachmentsConfigurationError(f"Unsupported digest algorithm: {algorithm}") from exc
 
         engine = create_engine(app.config[f"{EXTENSION_CONFIG_NAMESPACE}DATABASE_URI"])
         app.extensions[EXTENSION_NAME] = AttachmentSettings(engine=engine)
@@ -182,8 +166,15 @@ class Attachments:
 
 @event.listens_for(Engine, "connect")
 def set_sqlite_pragma(dbapi_connection: Any, connection_record: Any) -> None:
-    cursor = dbapi_connection.cursor()
-    ddl = current_app.extensions[EXTENSION_NAME].attach_ddl()
+    try:
+        ddl = current_app.extensions[EXTENSION_NAME].attach_ddl()
+    except KeyError:
+        log.debug("No attachments extension registered on this app, skipping")
+        return
+    except RuntimeError:
+        log.debug("No app context, skipping")
+        return
+
     log.debug("Attaching database", ddl=ddl)
-    cursor.execute(ddl)
-    cursor.close()
+    with contextlib.closing(dbapi_connection.cursor()) as cursor:
+        cursor.execute(ddl)

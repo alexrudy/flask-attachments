@@ -8,6 +8,7 @@ import click
 import humanize
 import rich.console
 import rich.table
+import structlog
 from flask.cli import AppGroup
 from sqlalchemy import delete
 from sqlalchemy import select
@@ -17,13 +18,15 @@ from .extension import settings
 from .models import Attachment
 from .services import AttachmentCache
 
+log = structlog.get_logger(__name__)
+
 group = AppGroup("attach", help="Manage attachments")
 
 
 @contextlib.contextmanager
 def sqlalchemy_session() -> Iterator[Session]:
     """Create and use a session attached to an attachment database"""
-    with Session(settings.engine) as session:  # type: ignore[attr-defined]
+    with Session(settings.engine) as session:
         yield session
 
 
@@ -46,14 +49,16 @@ def import_file(
     with sqlalchemy_session() as session:
         for file in files:
             filename = Path(name or file.name).name
-            existing_attachment = (
-                session.execute(select(Attachment).where(Attachment.filename == filename)).scalars().first()
-            )
+            existing_attachment = session.scalars(select(Attachment).where(Attachment.filename == filename)).first()
             if existing_attachment is not None and (not overwrite):
                 click.echo(f"Skipping {filename}")
-
-            attachment = Attachment(filename=filename, content_type=content_type)
-            attachment.data(file.read(), compression=compression, digest_algorithm=digest)
+                continue
+            elif existing_attachment is not None:
+                log.debug("Importing %s, overwriting %r", filename, existing_attachment.id)
+                attachment = existing_attachment
+            else:
+                attachment = Attachment(filename=filename, content_type=content_type)
+            attachment.streamed(file, compression=compression, digest_algorithm=digest)
             session.add(attachment)
             session.commit()
             click.echo(f"Imported {filename}")

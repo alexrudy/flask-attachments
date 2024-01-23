@@ -9,7 +9,7 @@ import tempfile
 import uuid
 from pathlib import Path
 from typing import Any
-from typing import cast
+from typing import IO
 from zlib import crc32
 
 import structlog
@@ -17,6 +17,7 @@ from flask import send_file
 from flask import url_for
 from sqlalchemy import DateTime
 from sqlalchemy import Enum
+from sqlalchemy import event
 from sqlalchemy import func
 from sqlalchemy import Integer
 from sqlalchemy import LargeBinary
@@ -32,7 +33,7 @@ from werkzeug.datastructures import FileStorage
 from werkzeug.http import parse_options_header
 from werkzeug.utils import cached_property
 
-from .extension import CompressionAlgorithm
+from .compression import CompressionAlgorithm
 from .extension import settings
 
 logger = structlog.get_logger(__name__)
@@ -49,12 +50,14 @@ class Attachment(Base):
     __tablename__ = "attachment"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    created: Mapped[dt.datetime] = mapped_column(DateTime, server_default=func.now())
-    updated: Mapped[dt.datetime] = mapped_column(DateTime, onupdate=func.now(), server_default=func.now())
+    created: Mapped[dt.datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+    updated: Mapped[dt.datetime] = mapped_column(
+        DateTime, nullable=False, onupdate=func.now(), server_default=func.now()
+    )
 
-    filename: Mapped[str] = mapped_column(String(), doc="for display and serving purposes")
-    content_type: Mapped[str] = mapped_column(String(), doc="for serving the correct file content_type")
-    content_length: Mapped[int] = mapped_column(Integer(), doc="uncompressed content length (bytes)")
+    filename: Mapped[str] = mapped_column(String(), nullable=True, doc="for display and serving purposes")
+    content_type: Mapped[str] = mapped_column(String(), nullable=True, doc="for serving the correct file content_type")
+    content_length: Mapped[int] = mapped_column(Integer(), nullable=True, doc="uncompressed content length (bytes)")
     contents: Mapped[bytes] = deferred(mapped_column(LargeBinary(), doc="compressed file contents"))
     compression: Mapped[CompressionAlgorithm] = mapped_column(
         Enum(CompressionAlgorithm), nullable=False, doc="which compression alogirthm was used"
@@ -89,6 +92,7 @@ class Attachment(Base):
     @validates("content_type")
     def _validate_content_type(self, key: str, value: Any) -> Any:
         self._empty_cache("_parsed_content_type")
+        self._empty_cache("mimetype")
 
         (well_known_types, standard_types) = mtdb.types_map_inv
         mime_type = parse_options_header(value)[0]
@@ -97,12 +101,18 @@ class Attachment(Base):
 
         return value
 
+    @validates("filename")
+    def _validate_filename(self, key: str, value: Any) -> Any:
+        self._empty_cache("extension")
+        self._empty_cache("etag")
+        return value
+
     @cached_property
     def extension(self) -> None | str:
         """Get the presumed extension for this file"""
         if self.filename is not None:
             suffix = Path(self.filename).suffix
-            if suffix is not None:
+            if suffix:
                 return suffix
         if self.mimetype is not None:
             return mtdb.guess_extension(self.mimetype, strict=False)
@@ -161,23 +171,16 @@ class Attachment(Base):
             content_type=content_type,
         )
 
-        with open(file, "rb") as f:
-            data = f.read()
-
-        attachment.data(data, compression=compression, digest_algorithm=digest_algorithm)
+        with open(file, "rb") as stream:
+            attachment.streamed(stream, compression=compression, digest_algorithm=digest_algorithm)
         return attachment
 
     def data(
         self, data: bytes, compression: CompressionAlgorithm | str | None = None, digest_algorithm: str | None = None
     ) -> None:
         """Import a file from bytes"""
-        if compression is None:
-            compression = cast(CompressionAlgorithm, settings.compression())  # type: ignore[attr-defined]
-        elif isinstance(compression, str):
-            compression = CompressionAlgorithm[compression.upper()]
-
-        if digest_algorithm is None:
-            digest_algorithm = cast(str, settings.digest())  # type: ignore[attr-defined]
+        compression = parse_compression(compression)
+        digest_algorithm = parse_digest(digest_algorithm)
 
         # Save file contents
         self.content_length = len(data)
@@ -188,26 +191,49 @@ class Attachment(Base):
         self.digest = hashlib.new(digest_algorithm, compressed).hexdigest()
         self.digest_algorithm = digest_algorithm
 
+        self._empty_cache("etag")
+        self._empty_cache("cached_at")
+        self._empty_cache("size")
+        self._empty_cache("compressed_size")
+
+    def streamed(
+        self,
+        stream: IO[bytes],
+        compression: CompressionAlgorithm | str | None = None,
+        digest_algorithm: str | None = None,
+        chunk_size: int = 16384,
+    ) -> None:
+        """Import a file from bytes"""
+        compression = parse_compression(compression)
+        digest_algorithm = parse_digest(digest_algorithm)
+
+        # Save file contents
+        contents = compression.stream(digest=digest_algorithm)
+        with contextlib.closing(contents) as contents:
+            shutil.copyfileobj(stream, contents, length=chunk_size)
+
+        self.content_length = contents.length
+        self.contents = contents.getvalue()
+        self.compression = compression
+
+        self.digest = contents.hexdigest()
+        self.digest_algorithm = digest_algorithm
+
     def receive(self, file: FileStorage) -> None:
         """Receive an uploaded file, compressing and saving it as appropritate"""
 
         # Set metadata if not set already
         if self.filename is None:
-            self.filename = file.filename
+            self.filename = Path(file.filename).name
 
         if self.content_type is None:
             self.content_type = file.content_type
 
-        # Compress Data
-        buffer = io.BytesIO()
-
-        with contextlib.closing(buffer):
-            file.save(buffer)
-            self.data(buffer.getvalue())
+        self.streamed(file.stream)
 
     @cached_property
     def cached_filepath(self) -> Path:
-        filename = cast(Path, settings.cache_directory()) / f"{self.digest_algorithm}-{self.digest}"  # type: ignore[attr-defined]
+        filename = settings.cache_directory() / f"{self.digest_algorithm}-{self.digest}"
         if self.extension is not None:
             return filename.with_suffix(self.extension)
         return filename
@@ -220,7 +246,9 @@ class Attachment(Base):
         with tempfile.TemporaryDirectory() as directory:
             bufferfile = Path(directory) / self.cached_filepath.name
             with bufferfile.open("w+b") as file:
-                file.write(compression.decompress(self.contents))
+                buffer = io.BytesIO(self.contents)
+                with compression.open(buffer, "rb") as compressed:
+                    shutil.copyfileobj(compressed, file)
 
             try:
                 bufferfile.rename(self.cached_filepath)
@@ -239,6 +267,7 @@ class Attachment(Base):
                     raise
 
         self._empty_cache("cached_at")
+        self._empty_cache("size")
 
     def send(self, as_download: bool = False) -> Response:
         """Send this attachment as a file to the client"""
@@ -248,6 +277,7 @@ class Attachment(Base):
             self.cached_filepath.touch(exist_ok=True)
 
         if not self.cached_filepath.exists():
+            # log the error, but also move on to
             logger.error(
                 "The cache was just warmed, but the file does not exist", path=self.cached_filepath, id=self.id
             )
@@ -262,6 +292,25 @@ class Attachment(Base):
             etag=self.etag,
         )
 
-    def clear(self) -> None:
-        """Remove the file from the cache"""
-        self.cached_filepath.unlink(missing_ok=True)
+
+def parse_compression(compression: CompressionAlgorithm | str | None) -> CompressionAlgorithm:
+    if compression is None:
+        return settings.compression()
+    elif isinstance(compression, str):
+        return CompressionAlgorithm[compression.upper()]
+    return compression
+
+
+def parse_digest(digest_algorithm: str | None) -> str:
+    if digest_algorithm is None:
+        return settings.digest()
+    return digest_algorithm
+
+
+@event.listens_for(Attachment, "load")
+def clear_instance_cached_properties(instance: Attachment, context: Any) -> None:
+    """Clear the cached properties on an instance of Attachment"""
+
+    for name in dir(Attachment):
+        if isinstance(getattr(Attachment, name, None), cached_property):
+            instance._empty_cache(name)

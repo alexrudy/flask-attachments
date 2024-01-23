@@ -14,14 +14,14 @@ def attachment(session: Session) -> Attachment:
 
 
 def test_download(client: FlaskClient, attachment: Attachment) -> None:
-    with client.get(f"/attachments/download/{attachment.id!s}/") as resp:
+    with client.get(attachment.download_link) as resp:
         assert resp.status_code == 200
         assert resp.mimetype == "text/plain"
         assert resp.text == "Hello from the test framework"  # type: ignore[attr-defined]
 
 
 def test_get(client: FlaskClient, attachment: Attachment) -> None:
-    with client.get(f"/attachments/id/{attachment.id!s}/") as resp:
+    with client.get(attachment.link) as resp:
         assert resp.status_code == 200
         assert resp.mimetype == "text/plain"
         assert resp.text == "Hello from the test framework"  # type: ignore[attr-defined]
@@ -31,7 +31,7 @@ def test_etag_stable(client: FlaskClient, attachment: Attachment, session: Sessi
     with client.get(f"/attachments/id/{attachment.id!s}/") as resp:
         assert resp.status_code == 200
         assert resp.mimetype == "text/plain"
-        assert resp.text == "Hello from the test framework"
+        assert resp.text == "Hello from the test framework"  # type: ignore[attr-defined]
         etag = resp.headers["ETag"]
 
     with client.get(f"/attachments/id/{attachment.id!s}/", headers={"If-None-Match": etag}) as resp:
@@ -44,7 +44,7 @@ def test_etag_stable(client: FlaskClient, attachment: Attachment, session: Sessi
     with client.get(f"/attachments/id/{attachment.id!s}/", headers={"If-None-Match": etag}) as resp:
         assert resp.status_code == 200
         assert resp.mimetype == "text/plain"
-        assert resp.text == "Hello from the test framework, again"
+        assert resp.text == "Hello from the test framework, again"  # type: ignore[attr-defined]
         assert etag != resp.headers["ETag"]
         next_etag = resp.headers["ETag"]
 
@@ -54,6 +54,16 @@ def test_etag_stable(client: FlaskClient, attachment: Attachment, session: Sessi
     with client.get(f"/attachments/id/{attachment.id!s}/", headers={"If-None-Match": next_etag}) as resp:
         assert resp.status_code == 200
         assert resp.mimetype == "text/plain"
-        assert resp.text == "Hello from the test framework"
+        assert resp.text == "Hello from the test framework"  # type: ignore[attr-defined]
         assert next_etag != resp.headers["ETag"]
         assert etag == resp.headers["ETag"]
+
+
+def test_missing(client: FlaskClient, attachment: Attachment, session: Session) -> None:
+    random_id = attachment.id
+    session.delete(attachment)
+    session.commit()
+
+    with client.get(f"/attachments/id/{random_id!s}/") as resp:
+        assert resp.status_code == 404
+        assert resp.mimetype == "text/html"
