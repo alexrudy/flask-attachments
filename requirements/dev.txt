@@ -7,7 +7,7 @@
 #
 -r tests.txt
 -r typing.txt
-black==23.9.1
+black==23.12.1
     # via -r requirements/dev.in
 build==1.0.3
     # via
@@ -15,49 +15,49 @@ build==1.0.3
     #   pip-tools
 bump2version==1.0.1
     # via -r requirements/dev.in
-cachetools==5.3.1
+cachetools==5.3.2
     # via tox
-certifi==2023.7.22
+certifi==2023.11.17
     # via requests
 cfgv==3.4.0
     # via pre-commit
 chardet==5.2.0
     # via tox
-charset-normalizer==3.2.0
+charset-normalizer==3.3.2
     # via requests
 colorama==0.4.6
     # via tox
-distlib==0.3.7
+distlib==0.3.8
     # via virtualenv
 docutils==0.20.1
     # via readme-renderer
-filelock==3.12.4
+filelock==3.13.1
     # via
     #   tox
     #   virtualenv
-flake8==6.1.0
+flake8==7.0.0
     # via -r requirements/dev.in
-identify==2.5.29
+identify==2.5.33
     # via pre-commit
-idna==3.4
+idna==3.6
     # via requests
-importlib-metadata==6.8.0
+importlib-metadata==7.0.1
     # via
     #   keyring
     #   twine
 jaraco-classes==3.3.0
     # via keyring
-keyring==24.2.0
+keyring==24.3.0
     # via twine
 mccabe==0.7.0
     # via flake8
-more-itertools==10.1.0
+more-itertools==10.2.0
     # via jaraco-classes
-nh3==0.2.14
+nh3==0.2.15
     # via readme-renderer
 nodeenv==1.8.0
     # via pre-commit
-pathspec==0.11.2
+pathspec==0.12.1
     # via black
 pip-compile-multi==2.6.3
     # via -r requirements/dev.in
@@ -65,16 +65,16 @@ pip-tools==7.3.0
     # via pip-compile-multi
 pkginfo==1.9.6
     # via twine
-platformdirs==3.10.0
+platformdirs==4.1.0
     # via
     #   black
     #   tox
     #   virtualenv
-pre-commit==3.4.0
+pre-commit==3.6.0
     # via -r requirements/dev.in
-pycodestyle==2.11.0
+pycodestyle==2.11.1
     # via flake8
-pyflakes==3.1.0
+pyflakes==3.2.0
     # via flake8
 pyproject-api==1.6.1
     # via tox
@@ -94,19 +94,19 @@ rfc3986==2.0.0
     # via twine
 toposort==1.10
     # via pip-compile-multi
-tox==4.11.3
+tox==4.12.1
     # via -r requirements/dev.in
 twine==4.0.2
     # via -r requirements/dev.in
-urllib3==2.0.5
+urllib3==2.1.0
     # via
     #   requests
     #   twine
-virtualenv==20.24.5
+virtualenv==20.25.0
     # via
     #   pre-commit
     #   tox
-wheel==0.41.2
+wheel==0.42.0
     # via pip-tools
 zipp==3.17.0
     # via importlib-metadata

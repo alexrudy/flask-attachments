@@ -1,0 +1,8 @@
+flask<3
+sqlalchemy<2.1
+structlog<23
+humanize
+rich
+
+pytest
+pytest-cov

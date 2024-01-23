@@ -20,6 +20,7 @@ jobs:
           - {name: Style, python: '3.11', os: ubuntu-latest, tox: style}
           - {name: Docs, python: '3.11', os: ubuntu-latest, tox: docs}
           - {name: Minimal, python: '3.11', os: ubuntu-latest, tox: minimal}
+          - {name: MSV, python: '3.10', os: ubuntu-latest, tox: msv}
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v3
