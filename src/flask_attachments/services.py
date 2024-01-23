@@ -38,7 +38,10 @@ class AttachmentCache(collections.abc.Mapping[str, Path]):
         self._remove_oldest()
 
     def __getitem__(self, key: str) -> Path:
-        return self.settings.cache_directory() / key
+        path = self.settings.cache_directory() / key
+        if not path.exists():
+            raise KeyError(key)
+        return path
 
     def __delitem__(self, key: str) -> None:
         (self.settings.cache_directory() / key).unlink(missing_ok=True)
