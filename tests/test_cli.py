@@ -113,10 +113,17 @@ def test_cli_import_overwrite(tmp_path: Path, session: Session) -> None:
     assert attachment.cached_filepath.read_text() == "Hello again from the test framework"
 
 
-@pytest.mark.usefixtures("attachment")
-def test_cli_list_table() -> None:
+def test_cli_list_table(attachment: Attachment, session: Session) -> None:
     runner = click.testing.CliRunner()
 
+    outcome = runner.invoke(group, ["list", "--rich"], catch_exceptions=False)
+
+    assert outcome.exit_code == 0
+    print(outcome.output)
+    assert "exam" in outcome.output
+
+    attachment.content_length = None  # type: ignore
+    session.commit()
     outcome = runner.invoke(group, ["list", "--rich"], catch_exceptions=False)
 
     assert outcome.exit_code == 0

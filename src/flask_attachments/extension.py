@@ -12,9 +12,11 @@ import structlog
 from flask import current_app
 from flask import Flask
 from sqlalchemy import event
+from sqlalchemy import MetaData
 from sqlalchemy.engine import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.engine import make_url
+from sqlalchemy.orm import registry as Registry
 from werkzeug.local import LocalProxy
 
 from .compression import CompressionAlgorithm
@@ -88,12 +90,32 @@ class AttachmentsConfigurationError(ValueError):
 
 
 class Attachments:
-    def __init__(self, app: Flask | None = None) -> None:
+    def __init__(self, app: Flask | None = None, registry: Registry | None = None) -> None:
+        from .models import Attachment
+
+        if registry is None:
+            registry = Registry()
+
+        if not hasattr(Attachment, "__mapper__"):
+            registry.map_declaratively(Attachment)
+        elif Attachment.__table__ not in registry.metadata:  # type: ignore
+            raise AttachmentsConfigurationError(
+                "The Attachment model has already been mapped to a different metadata"
+                "\nConsider providing a custom registry to the Attachments extension"
+                "\nor only intializing the extension once"
+            )
+
+        self.registry = registry
+
         if app is not None:
             self.init_app(app)
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} at {id(self)!s}>"
+
+    @property
+    def metadata(self) -> MetaData:
+        return self.registry.metadata
 
     def init_app(self, app: Flask) -> None:
         """Initialize the app here"""

@@ -9,6 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
+from sqlalchemy.orm import registry as Registry
 
 
 def test_settings_without_app_context() -> None:
@@ -32,8 +33,8 @@ def test_settings_sqlalchemy(app: Flask) -> None:
     assert settings.attach_filepath() == ":memory:"
 
 
-def test_init_extension_without_app_context() -> None:
-    attachments = Attachments()
+def test_init_extension_without_app_context(registry: Registry) -> None:
+    attachments = Attachments(registry=registry)
 
     assert repr(attachments).startswith("<Attachments")
 
@@ -78,7 +79,11 @@ missing = object()
     ],
 )
 def test_configuration_error(
-    app: Flask, key: str, value: str | None | object, execption: type[Exception] | None
+    app: Flask,
+    key: str,
+    value: str | None | object,
+    execption: type[Exception] | None,
+    registry: Registry,
 ) -> None:
     key = f"ATTACHMENTS_{key}"
     if value is not missing:
@@ -87,27 +92,30 @@ def test_configuration_error(
         app.config.pop(key, None)
 
     if execption is None:
-        Attachments(app)
+        Attachments(app, registry=registry)
     else:
         with pytest.raises(execption):
-            Attachments(app)
+            Attachments(app, registry=registry)
 
 
-def test_configuration_cache_directory_error(app: Flask, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_configuration_cache_directory_error(app: Flask, registry: Registry, monkeypatch: pytest.MonkeyPatch) -> None:
     app.config["ATTACHMENTS_CACHE_DIRECTORY"] = "/some/random/path"
 
     monkeypatch.setattr("pathlib.Path.mkdir", mock.Mock(side_effect=OSError))
 
     with pytest.raises(AttachmentsConfigurationError):
-        Attachments(app)
+        Attachments(app, registry=registry)
 
 
-def test_no_blueprint_registration(
-    app: Flask,
-) -> None:
+def test_no_blueprint_registration(app: Flask, registry: Registry) -> None:
     app.config["ATTACHMENTS_BLUEPRINT"] = False
 
-    Attachments(app)
+    Attachments(app, registry=registry)
+
+
+def test_repeat_sqla_registry(app: Flask) -> None:
+    with pytest.raises(AttachmentsConfigurationError):
+        Attachments(app)
 
 
 def test_engine_connect_early(app: Flask) -> None:

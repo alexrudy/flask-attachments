@@ -10,6 +10,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 from typing import IO
+from typing import TYPE_CHECKING
 from zlib import crc32
 
 import structlog
@@ -23,7 +24,6 @@ from sqlalchemy import Integer
 from sqlalchemy import LargeBinary
 from sqlalchemy import String
 from sqlalchemy import Uuid
-from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import deferred
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
@@ -40,11 +40,7 @@ logger = structlog.get_logger(__name__)
 mtdb = mimetypes.MimeTypes()
 
 
-class Base(DeclarativeBase):
-    """Provides a base class for all models in flask-attachments"""
-
-
-class Attachment(Base):
+class Attachment:
     """Represents a file on the filesystem / or stored in the attachment database"""
 
     __tablename__ = "attachment"
@@ -66,6 +62,19 @@ class Attachment(Base):
     digest_algorithm: Mapped[str] = mapped_column(String(), nullable=False, doc="algorithm for digest")
 
     __table_args__ = ({"schema": "attachments"},)
+
+    if TYPE_CHECKING:
+
+        def __init__(
+            self,
+            *,
+            filename: str | None = None,
+            content_type: str | None = None,
+            content_length: int | None = None,
+            compression: CompressionAlgorithm | None = None,
+            digest_algorithm: str | None = None,
+        ) -> None:
+            ...
 
     def __repr__(self) -> str:
         return f"<Attachment id={self.id} filename={self.filename} mimetype={self.mimetype}>"

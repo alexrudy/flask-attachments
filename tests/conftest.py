@@ -1,17 +1,24 @@
 import logging
 from collections.abc import Iterator
 from typing import Any
-from typing import cast
 
 import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 from flask_attachments.extension import Attachments
 from flask_attachments.extension import settings
-from flask_attachments.models import Base
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
+from sqlalchemy.orm import registry as Registry
 from sqlalchemy.orm import Session
+
+#: Global registry for SQLAlchemy models.
+global_registry = Registry()
+
+
+@pytest.fixture
+def registry(app: Flask) -> Iterator[Registry]:
+    yield global_registry
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -28,19 +35,19 @@ def log_engine_queries() -> None:
 
 @pytest.fixture()
 def engine(app_context: None, extension: Attachments) -> Engine:
-    return cast(Engine, settings.engine)  # type: ignore[attr-defined]
+    return settings.engine
 
 
 @pytest.fixture
-def session(engine: Engine) -> Iterator[Session]:
-    Base.metadata.create_all(engine)
+def session(engine: Engine, extension: Attachments) -> Iterator[Session]:
+    extension.metadata.create_all(engine)
     with Session(engine) as session:
         yield session
 
 
 @pytest.fixture
-def extension(app: Flask) -> Iterator[Attachments]:
-    attachments = Attachments(app=app)
+def extension(app: Flask, registry: Registry) -> Iterator[Attachments]:
+    attachments = Attachments(app=app, registry=registry)
     yield attachments
 
 
