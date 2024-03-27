@@ -35,11 +35,64 @@ raw-options = { local_scheme = "no-local-version" }
 [tool.hatch.build.hooks.vcs]
 version-file = "src/flask_attachments/_version.py"
 
-[tool.hatch.build.targets.wheel]
-packages = [" src/flask_attachments"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src"]
+include = ["src/flask_attachments"]
+exclude = [
+    "tests/*",
+    "docs/*",
+    ".*",
+    "build/*",
+    "dist/*",
+    "src/flask_attachments.egg-info/*",
+]
 
 [tool.black]
 line-length = 120
+
+[tool.pytest.ini_options]
+testpaths = "tests"
+filterwarnings = ["error"]
+addopts = ["--cov=flask_attachments"]
+log_level = "NOTSET"
+
+[tool.coverage.run]
+branch = true
+source = ["src/flask_attachments", "tests"]
+
+[tool.coverage.paths]
+source = ["src", "*/site-packages"]
+
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+    "except BaseException:",
+    "Protocol",
+]
+
+
+[tool.mypy]
+files = "src/flask_attachments"
+python_version = "3.10"
+show_error_codes = true
+allow_redefinition = true
+disallow_subclassing_any = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+no_implicit_optional = true
+local_partial_types = true
+no_implicit_reexport = true
+strict_equality = true
+warn_redundant_casts = true
+warn_unused_configs = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = "dotenv"
+ignore_missing_imports = true
