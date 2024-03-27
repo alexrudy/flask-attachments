@@ -1,0 +1,11 @@
+[flake8]
+select = B, E, F, W, B9, ISC
+ignore =
+	E203
+	E402
+	E501
+	E722
+	W503
+	E712,E711
+max-line-length = 120
+min_python_version = 3.10.0
