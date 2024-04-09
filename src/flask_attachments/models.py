@@ -39,26 +39,46 @@ from .extension import settings
 logger = structlog.get_logger(__name__)
 mtdb = mimetypes.MimeTypes()
 
+__all__ = ["Attachment"]
+
 
 class Attachment:
-    """Represents a file on the filesystem / or stored in the attachment database"""
+    """Represents a file on the filesystem or stored in the attachment database"""
 
     __tablename__ = "attachment"
 
+    #: Primary key (a UUID)
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+
+    #: When this attachment was created (in the database)
     created: Mapped[dt.datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+
+    #: When this attachment record   was last updated
     updated: Mapped[dt.datetime] = mapped_column(
         DateTime, nullable=False, onupdate=func.now(), server_default=func.now()
     )
 
+    #: The name used for display and download of the attachment
     filename: Mapped[str] = mapped_column(String(), nullable=True, doc="for display and serving purposes")
+
+    #: The MIME type of the file
     content_type: Mapped[str] = mapped_column(String(), nullable=True, doc="for serving the correct file content_type")
+
+    #: The length of the file in bytes, uncompressed
     content_length: Mapped[int] = mapped_column(Integer(), nullable=True, doc="uncompressed content length (bytes)")
+
+    #: The compressed file contents
     contents: Mapped[bytes] = deferred(mapped_column(LargeBinary(), doc="compressed file contents"))
+
+    #: The compression algorithm used
     compression: Mapped[CompressionAlgorithm] = mapped_column(
         Enum(CompressionAlgorithm), nullable=False, doc="which compression alogirthm was used"
     )
+
+    #: The hash digest of the file
     digest: Mapped[str] = mapped_column(String(), nullable=False, doc="hash digest for file")
+
+    #: The hash digest algorithm used
     digest_algorithm: Mapped[str] = mapped_column(String(), nullable=False, doc="algorithm for digest")
 
     __table_args__ = ({"schema": "attachments"},)
@@ -91,7 +111,7 @@ class Attachment:
 
     @cached_property
     def mimetype(self) -> None | str:
-        """Get the mimetype for this file"""
+        """The MIME type for this file, possibly inferred"""
         if self.content_type is None:
             if self.filename is not None:
                 return mtdb.guess_type(self.filename)[0]
@@ -118,7 +138,7 @@ class Attachment:
 
     @cached_property
     def extension(self) -> None | str:
-        """Get the presumed extension for this file"""
+        """The presumed extension for this file"""
         if self.filename is not None:
             suffix = Path(self.filename).suffix
             if suffix:
@@ -156,10 +176,12 @@ class Attachment:
 
     @cached_property
     def link(self) -> str:
+        """Url for serving the file"""
         return url_for("attachments.id", id=self.id)
 
     @cached_property
     def download_link(self) -> str:
+        """Url for downloading the file"""
         return url_for("attachments.download", id=self.id)
 
     @classmethod
@@ -170,7 +192,7 @@ class Attachment:
         compression: CompressionAlgorithm | str | None = None,
         digest_algorithm: str | None = None,
     ) -> "Attachment":
-        """Import a file from the filesystem"""
+        """Create a new attachment by reading a file from disk"""
 
         if content_type is None:
             content_type = mtdb.guess_type(str(file))[0]
@@ -187,7 +209,7 @@ class Attachment:
     def data(
         self, data: bytes, compression: CompressionAlgorithm | str | None = None, digest_algorithm: str | None = None
     ) -> None:
-        """Import a file from bytes"""
+        """Load a file from bytes into this attachment"""
         compression = parse_compression(compression)
         digest_algorithm = parse_digest(digest_algorithm)
 
@@ -212,7 +234,7 @@ class Attachment:
         digest_algorithm: str | None = None,
         chunk_size: int = 16384,
     ) -> None:
-        """Import a file from bytes"""
+        """Stream a file from bytes into this attachment"""
         compression = parse_compression(compression)
         digest_algorithm = parse_digest(digest_algorithm)
 
@@ -242,6 +264,7 @@ class Attachment:
 
     @cached_property
     def cached_filepath(self) -> Path:
+        """The path to the file in the cache (on disk)"""
         filename = settings.cache_directory() / f"{self.digest_algorithm}-{self.digest}"
         if self.extension is not None:
             return filename.with_suffix(self.extension)

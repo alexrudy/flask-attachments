@@ -6,6 +6,8 @@ from pathlib import Path
 from .extension import AttachmentSettings
 from .extension import get_settings
 
+__all__ = ["AttachmentCache"]
+
 
 class AttachmentCache(collections.abc.Mapping[str, Path]):
     """On-disk cache for attachment files

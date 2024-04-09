@@ -1,4 +1,6 @@
 API Reference
 =============
 
-.. automodapi:: flask_attachments
+.. automodule:: flask_attachments.compression
+
+.. automodapi:: flask_attachments.models

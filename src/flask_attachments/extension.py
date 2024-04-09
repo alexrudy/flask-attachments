@@ -33,6 +33,8 @@ EXTENSION_CONFIG_NAMESPACE = "ATTACHMENTS_"
 
 logger = structlog.get_logger(__name__)
 
+__all__ = ["Attachments", "AttachmentSettings", "settings", "AttachmentsConfigurationError"]
+
 
 @dc.dataclass
 class AttachmentSettings:
@@ -82,10 +84,13 @@ def get_settings() -> AttachmentSettings:
         raise RuntimeError("No attachments extension registered on this app, call init_app first") from exc
 
 
+#: Flask proxy to the current attachment settings
 settings = cast(AttachmentSettings, LocalProxy(get_settings))
 
 
 class AttachmentsConfigurationError(ValueError):
+    """Configuration error for the Attachments extension"""
+
     pass
 
 

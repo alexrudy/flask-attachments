@@ -7,5 +7,6 @@ ignore =
 	E722
 	W503
 	E712,E711
+	E704
 max-line-length = 120
 min_python_version = 3.10.0

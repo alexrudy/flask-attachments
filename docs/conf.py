@@ -31,8 +31,20 @@ import flask_attachments
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
-extensions = ["sphinx_automodapi.automodapi", "sphinx.ext.autodoc", "sphinx.ext.viewcode", "sphinx_mdinclude"]
+extensions = [
+    "sphinx_automodapi.automodapi",
+    "sphinx.ext.autodoc",
+    "sphinx.ext.viewcode",
+    "sphinx_mdinclude",
+    "sphinx.ext.autosummary",
+    "sphinx_automodapi.automodsumm",
+]
 
+
+autodoc_default_options = {
+    "members": True,
+    "member-order": "bysource",
+}
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
 
@@ -47,7 +59,7 @@ master_doc = "index"
 
 # General information about the project.
 project = "Flask Attachments"
-copyright = "2023, Alex Rudy"
+copyright = "2024, Alex Rudy"
 author = "Alex Rudy"
 
 # The version info for the project you're documenting, acts as replacement

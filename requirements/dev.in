@@ -1,5 +1,6 @@
 -r tests.in
 -r typing.in
+-r docs.in
 pip-compile-multi
 pre-commit
 tox
