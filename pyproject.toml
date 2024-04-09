@@ -30,11 +30,12 @@ files = ["requirements/base.in"]
 
 [tool.hatch.version]
 source = "vcs"
-raw-options = { local_scheme = "no-local-version" }
+
+[tool.hatch.version.raw-options]
+local_scheme = "no-local-version"
 
 [tool.hatch.build.hooks.vcs]
 version-file = "src/flask_attachments/_version.py"
-
 
 [tool.hatch.build.targets.sdist]
 include = ["src/flask_attachments"]
