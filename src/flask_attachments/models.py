@@ -187,7 +187,7 @@ class Attachment:
     @classmethod
     def from_file(
         cls,
-        file: os.PathLike[str],
+        file: str | os.PathLike[str],
         content_type: str | None = None,
         compression: CompressionAlgorithm | str | None = None,
         digest_algorithm: str | None = None,
