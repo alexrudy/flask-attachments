@@ -128,11 +128,12 @@ def test_filename_blank(session: Session) -> None:
 
 @pytest.mark.usefixtures("extension")
 @pytest.mark.parametrize("content_type", ["text/plain", None])
-def test_from_file(tmp_path: Path, content_type: str | None) -> None:
+@pytest.mark.parametrize("filename_type", [str, Path])
+def test_from_file(tmp_path: Path, content_type: str | None, filename_type: type[str] | type[Path]) -> None:
     path = tmp_path / "example.txt"
     path.write_text("Hello from the test framework")
 
-    att = Attachment.from_file(path, content_type=content_type)
+    att = Attachment.from_file(filename_type(path), content_type=content_type)
     assert att.filename == "example.txt"
     assert att.extension == ".txt"
     assert att.mimetype == "text/plain"
