@@ -1,6 +1,5 @@
 import contextlib
 import datetime as dt
-import hashlib
 import io
 import mimetypes
 import os
@@ -22,11 +21,13 @@ from sqlalchemy import event
 from sqlalchemy import func
 from sqlalchemy import Integer
 from sqlalchemy import LargeBinary
+from sqlalchemy import select
 from sqlalchemy import String
 from sqlalchemy import Uuid
 from sqlalchemy.orm import deferred
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
+from sqlalchemy.orm import object_session
 from sqlalchemy.orm import validates
 from werkzeug import Response
 from werkzeug.datastructures import FileStorage
@@ -157,7 +158,7 @@ class Attachment:
 
     @cached_property
     def size(self) -> int | None:
-        """When this file was written to disk"""
+        """Content length, but prefers the size of the file on disk if available"""
         try:
             return self.cached_filepath.stat().st_size
         except FileNotFoundError:
@@ -165,7 +166,14 @@ class Attachment:
 
     @cached_property
     def compressed_size(self) -> int:
-        """When this file was written to disk"""
+        """Content length in compressed form, uses the length of the contents in the database."""
+
+        session = object_session(self)
+        if session is not None:
+            length = session.scalar(select(func.length(self.__class__.contents)))
+            if length is not None:
+                return length
+
         return len(self.contents)
 
     @cached_property
@@ -210,22 +218,8 @@ class Attachment:
         self, data: bytes, compression: CompressionAlgorithm | str | None = None, digest_algorithm: str | None = None
     ) -> None:
         """Load a file from bytes into this attachment"""
-        compression = parse_compression(compression)
-        digest_algorithm = parse_digest(digest_algorithm)
-
-        # Save file contents
-        self.content_length = len(data)
-        self.contents = compressed = compression.compress(data)
-        self.compression = compression
-
-        # Compute Digest
-        self.digest = hashlib.new(digest_algorithm, compressed).hexdigest()
-        self.digest_algorithm = digest_algorithm
-
-        self._empty_cache("etag")
-        self._empty_cache("cached_at")
-        self._empty_cache("size")
-        self._empty_cache("compressed_size")
+        stream = io.BytesIO(data)
+        self.streamed(stream, compression=compression, digest_algorithm=digest_algorithm)
 
     def streamed(
         self,
