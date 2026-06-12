@@ -44,12 +44,12 @@ class AttachmentSettings:
     def config(self) -> dict[str, Any]:
         return current_app.config.get_namespace(EXTENSION_CONFIG_NAMESPACE, lowercase=False)
 
-    def attach_filepath(self) -> str | None:
+    def attach_filepath(self) -> str:
         uri = make_url(self.config["DATABASE_URI"])
         if "sqlalchemy" in current_app.extensions:
             db = current_app.extensions["sqlalchemy"].db
             (uri, _options) = db.apply_driver_hacks(current_app, uri, {})
-        return uri.database
+        return uri.database or ""
 
     def attach_ddl(self) -> str:
         schema = self.config.get("DATABASE_SCHEMA", "attachments")
